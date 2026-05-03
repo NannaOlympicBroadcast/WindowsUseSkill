@@ -1,11 +1,11 @@
 ---
 name: windows-use
-description: Drive Windows GUI applications from a shell using two bundled tiny binaries — wmctrl.exe (list windows / switch focus by process name) and xdotool.exe (send keystrokes to the active window, including modifier combos like Ctrl+V, Alt+F4, arrow keys, and literal text). Includes PowerShell helpers for the focus-then-send pattern and a .NET-based active-window screenshot tool that fills in the one capability the upstream binaries lack. Use this whenever the user wants to automate a Windows desktop app from the command line — switching focus between Chrome / VSCode / Cursor / MATLAB / WeChat / any other app, pasting clipboard contents into a foreground window, scripting keyboard shortcuts to trigger menu actions, building "computer use lite" workflows that don't need a full screen-reading agent, or capturing the current foreground window. Trigger on mentions of wmctrl, xdotool, SendKeys, "switch to <app> and …", "focus <app>", "send keys", "paste into <window>", "screenshot the active window", "automate Windows GUI", or any request that maps to focus-window + send-key + maybe-snap.
+description: Drive Windows GUI applications from a shell using two bundled tiny binaries — wmctrl.exe (list windows / switch focus by process name) and xdotool.exe (send keystrokes to the active window, including modifier combos like Ctrl+V, Alt+F4, arrow keys, and literal text). Also includes mouse-click.ps1 for left/right/middle click, double-click, and drag-and-drop at any screen coordinate (no extra binaries needed — pure PowerShell + user32). Includes PowerShell helpers for the focus-then-send pattern, a mouse-click helper, and a .NET-based active-window screenshot tool. Use this whenever the user wants to automate a Windows desktop app from the command line — switching focus between Chrome / VSCode / Cursor / MATLAB / WeChat / any other app, pasting clipboard contents into a foreground window, scripting keyboard shortcuts to trigger menu actions, clicking UI elements by screen coordinate, drag-and-drop, building "computer use lite" workflows that don't need a full screen-reading agent, or capturing the current foreground window. Trigger on mentions of wmctrl, xdotool, SendKeys, "switch to <app> and …", "focus <app>", "send keys", "paste into <window>", "screenshot the active window", "click at", "mouse click", "right-click", "double-click", "drag", "automate Windows GUI", or any request that maps to focus-window + send-key/mouse + maybe-snap.
 ---
 
 # Windows Use
 
-Two tiny CLI binaries plus a few PowerShell helpers that together let you drive any Windows GUI app from a script: list windows, switch focus by process name, send keystrokes (including literal text), and snapshot the foreground window. Think of it as "computer use lite" — no screen reading, no mouse, just keyboard automation, which is enough for a surprising number of real workflows.
+Two tiny CLI binaries plus a few PowerShell helpers that together let you drive any Windows GUI app from a script: list windows, switch focus by process name, send keystrokes (including literal text), click or drag the mouse at any screen coordinate, and snapshot the foreground window. Think of it as "computer use lite" — no screen reading, just keyboard and mouse automation, which is enough for a surprising number of real workflows.
 
 ## What's bundled
 
@@ -18,6 +18,7 @@ windows-use/
 │   ├── install-binaries.ps1          # one-time setup: downloads the two .exe files
 │   ├── focus-and-send.ps1            # the everyday combo (PowerShell, recommended)
 │   ├── focus-and-send.cmd            # cmd.exe equivalent (with ^ escaping handled)
+│   ├── mouse-click.ps1               # move cursor / left/right/middle click / double-click / drag
 │   ├── screenshot-active-window.ps1  # capture current foreground window to PNG
 │   └── wechat-search-and-snap.ps1    # example recipe: focus WeChat, search a chat, screenshot
 └── references/
@@ -39,20 +40,21 @@ The binaries are tiny .NET Framework PE32 assemblies built from <https://github.
 
 ## When to reach for this skill
 
-Use it whenever the task boils down to *focus a window → press some keys* on Windows. Concrete examples:
+Use it whenever the task boils down to *focus a window → press some keys or click a UI element* on Windows. Concrete examples:
 
 - Switch to Chrome and reload the current tab
 - Focus VSCode/Cursor and trigger "Save All" or "Run Code"
 - Bring MATLAB to front, send `Escape` to clear the prompt, then paste clipboard
 - Switch to a fiber optic detection demo window and send `q` to stop it
 - Open WeChat, search a contact's name, hit Enter to open the chat, screenshot the result
+- Click a UI element that has no keyboard shortcut (a canvas button, a dialog checkbox, a tray icon)
+- Drag-and-drop a file or resize a panel by screen coordinate
 - Any keyboard-shortcut-driven workflow you'd normally do with AutoHotkey but want callable from a Claude session
 
 ## When this skill is the wrong tool
 
 Be honest about the limits. These tools **cannot**:
 
-- Move or click the mouse (no click, no drag, no hover)
 - Press the Windows key (`{LWIN}` / `^{ESC}`-style tricks won't work — the upstream README confirms this)
 - Read text from the screen or interpret what's on screen (no OCR, no UI tree)
 - Focus a window by its title — only by **process name**
@@ -60,7 +62,9 @@ Be honest about the limits. These tools **cannot**:
 - Send keys to a *background* / unfocused window (SendKeys goes to the foreground)
 - Press PrintScreen via SendKeys (system-level hook bypasses .NET) — the bundled `screenshot-active-window.ps1` works around this with the .NET drawing API instead
 
-If the user needs mouse control or screen reading, point them at AutoHotkey, PyAutoGUI, or a real "computer use" agent — don't try to fake it with this skill.
+Mouse control (click, drag, hover) **is** supported by the bundled `mouse-click.ps1` — see **Tool 3** below.
+
+If the user needs screen reading or OCR, point them at AutoHotkey, PyAutoGUI, or a real "computer use" agent — don't try to fake it with this skill.
 
 ## The core loop
 
@@ -128,6 +132,58 @@ xdotool key "<KEYS>"
 **Two real-world gotchas about `~`:** in SendKeys `~` is **Enter**, not tilde. To send a literal tilde, write `{~}`. And the `{ENTER}` form is more readable, so prefer it.
 
 For anything beyond this table — mouse-modifier combos, keypad keys, the full repeat-syntax — read `references/sendkeys-syntax.md`.
+
+## Tool 3: `mouse-click.ps1`
+
+Pure-PowerShell mouse control — no extra binaries. Uses `user32!SetCursorPos` + `mouse_event` via P/Invoke.
+
+```powershell
+.\scripts\mouse-click.ps1 [-X <int>] [-Y <int>] [-Button Left|Right|Middle|None]
+                           [-DoubleClick] [-DragToX <int>] [-DragToY <int>]
+                           [-SettleMs <int>]
+```
+
+| Parameter | Description |
+|-----------|-------------|
+| `-X`, `-Y` | Target screen coordinates in pixels (origin at top-left of primary monitor; required) |
+| `-Button` | `Left` (default), `Right`, `Middle`, or `None` (move only) |
+| `-DoubleClick` | Fire two clicks in rapid succession |
+| `-DragToX`, `-DragToY` | Destination for a click-and-drag; both must be provided together |
+| `-SettleMs` | Wait in ms after each cursor move before the next event (default 50) |
+
+**Common operations:**
+
+```powershell
+# Left-click at a pixel coordinate
+.\scripts\mouse-click.ps1 -X 960 -Y 540
+
+# Right-click (context menu)
+.\scripts\mouse-click.ps1 -X 200 -Y 150 -Button Right
+
+# Double-click (open a file/folder)
+.\scripts\mouse-click.ps1 -X 400 -Y 300 -DoubleClick
+
+# Middle-click (open link in new tab in a browser)
+.\scripts\mouse-click.ps1 -X 760 -Y 85 -Button Middle
+
+# Click-and-drag (e.g., select a region or move a window)
+.\scripts\mouse-click.ps1 -X 100 -Y 200 -DragToX 500 -DragToY 200
+
+# Move cursor without clicking (trigger a tooltip or hover state)
+.\scripts\mouse-click.ps1 -X 960 -Y 540 -Button None
+```
+
+**How to find coordinates:** run `screenshot-active-window.ps1`, open the saved PNG in Paint or any image viewer, and hover over the target element — the pixel position is shown in the status bar. Alternatively, call `[System.Windows.Forms.Cursor]::Position` in PowerShell while hovering to read the live cursor position.
+
+**Tip — combine with focus-and-send.ps1:** focus the window first so the click lands in the right app:
+
+```powershell
+.\scripts\focus-and-send.ps1 -Process chrome -Keys ""   # focus chrome, send no keys
+Start-Sleep -Milliseconds 200
+.\scripts\mouse-click.ps1 -X 760 -Y 85                  # click address bar
+```
+
+**Multi-monitor note:** on setups where a monitor sits to the left of the primary, `X` can be negative. `SetCursorPos` uses virtual-desktop coordinates, so pass the actual screen X you see in the display arrangement.
 
 ## The shell-escaping trap (read this before composing commands)
 

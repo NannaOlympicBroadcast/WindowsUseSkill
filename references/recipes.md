@@ -14,6 +14,66 @@ Output is `PID\tProcessName\tWindowTitle`. The middle column is what you pass to
 
 ---
 
+## Mouse operations (`mouse-click.ps1`)
+
+`scripts/mouse-click.ps1` provides mouse control without any extra binaries: it calls `user32!SetCursorPos` + `mouse_event` directly via PowerShell P/Invoke.
+
+**Finding coordinates:** take a screenshot with `screenshot-active-window.ps1`, open the PNG in Paint, and hover over the target element — the pixel position appears in the status bar. Or, while hovering over the element in the live window, run:
+
+```powershell
+Add-Type -AssemblyName System.Windows.Forms
+[System.Windows.Forms.Cursor]::Position
+```
+
+### Quick reference
+
+| Task | Command |
+|------|---------|
+| Left-click | `.\scripts\mouse-click.ps1 -X 960 -Y 540` |
+| Right-click (context menu) | `.\scripts\mouse-click.ps1 -X 960 -Y 540 -Button Right` |
+| Middle-click (open in new tab) | `.\scripts\mouse-click.ps1 -X 760 -Y 85 -Button Middle` |
+| Double-click | `.\scripts\mouse-click.ps1 -X 400 -Y 300 -DoubleClick` |
+| Move cursor only (hover) | `.\scripts\mouse-click.ps1 -X 960 -Y 540 -Button None` |
+| Click-and-drag | `.\scripts\mouse-click.ps1 -X 100 -Y 200 -DragToX 500 -DragToY 200` |
+
+### Focus then click
+
+Always focus the target window before clicking — a click landing on an unfocused window may only bring it to the foreground without registering the intended action:
+
+```powershell
+# Focus Chrome, then click the address bar
+.\scripts\focus-and-send.ps1 -Process chrome -Keys ""
+Start-Sleep -Milliseconds 200
+.\scripts\mouse-click.ps1 -X 760 -Y 48     # approximate address-bar Y for maximised Chrome
+```
+
+### Select text with drag
+
+```powershell
+# Drag to select a word or region in any text editor
+.\scripts\focus-and-send.ps1 -Process notepad -Keys ""
+Start-Sleep -Milliseconds 200
+.\scripts\mouse-click.ps1 -X 150 -Y 120 -DragToX 350 -DragToY 120
+```
+
+### Screenshot → inspect coordinates → click workflow
+
+```powershell
+# 1. Focus the target app and snapshot it
+.\scripts\focus-and-send.ps1 -Process SomeApp -Keys ""
+Start-Sleep -Milliseconds 300
+.\scripts\screenshot-active-window.ps1 -OutPath "$env:TEMP\snap.png"
+
+# 2. Open the screenshot in Paint (or IrfanView) to read pixel coordinates
+Start-Process mspaint "$env:TEMP\snap.png"
+# Hover over the button you want to click; note the X, Y in the status bar.
+
+# 3. Click at those coordinates
+.\scripts\mouse-click.ps1 -X <X> -Y <Y>
+```
+
+---
+
 ## Chrome / Edge
 
 Process names: `chrome`, `msedge`.
