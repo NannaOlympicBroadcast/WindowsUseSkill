@@ -1,6 +1,6 @@
 # windows-use
 
-A Claude skill for driving Windows GUI applications from a shell — switch window focus by process name, send keystrokes (modifier combos, function keys, literal text), and capture the foreground window. Think of it as "computer use lite": no screen reading, no mouse, just keyboard automation, which turns out to be enough for a surprising number of real workflows.
+A Claude skill for driving Windows GUI applications from a shell — switch window focus by process name, send keystrokes (modifier combos, function keys, literal text), click or drag the mouse at any screen coordinate, and capture the foreground window. Think of it as "computer use lite": no screen reading, just keyboard and mouse automation, which turns out to be enough for a surprising number of real workflows.
 
 Built around two tiny upstream binaries — [`wmctrl-for-windows`](https://github.com/ebranlard/wmctrl-for-windows) and [`xdotool-for-windows`](https://github.com/ebranlard/xdotool-for-windows) — wrapped in PowerShell helpers and a `.NET`-based screenshot tool that fills in the one capability the upstream tools lack.
 
@@ -12,19 +12,22 @@ Any task that boils down to *focus a window → press some keys* on Windows. For
 - Bring VSCode/Cursor to the front and trigger Save All
 - Focus MATLAB, clear the prompt, paste clipboard, run it
 - Open WeChat, search a contact's name, hit Enter, screenshot the result
+- Click a UI element that has no keyboard shortcut (context-menu, dialog button, canvas element)
+- Drag-and-drop files or UI controls by screen coordinate
 - Stop or restart a long-running demo window from a script
 - Any keyboard-shortcut workflow you'd normally script with AutoHotkey but want callable from a Claude session
 
 ## What this is *not* for
 
 These tools cannot:
-- Move or click the mouse
 - Press the Windows key (`{LWIN}` / Win+Shift+S won't work — system-level)
 - Read text from the screen, do OCR, or interpret UI structure
 - Focus a window by title (only by process name)
 - Distinguish multiple instances of the same process — picks the first match
 
-For mouse control or screen reading, use [AutoHotkey](https://www.autohotkey.com/), [PyAutoGUI](https://github.com/asweigart/pyautogui), or a real screen-using agent.
+Mouse control (click, drag, hover) **is** supported via the bundled `scripts/mouse-click.ps1`.
+
+For screen reading or full OCR-based UI automation, use [AutoHotkey](https://www.autohotkey.com/), [PyAutoGUI](https://github.com/asweigart/pyautogui), or a real screen-using agent.
 
 ## Installation
 
@@ -72,6 +75,15 @@ You should see "Hello / World / <current timestamp>" in Notepad — F5 inserts t
 
 ```powershell
 .\scripts\focus-and-send.ps1 -Process MATLAB -Keys "{ESC}^v{ENTER}" -DelayMs 300
+```
+
+### Click a UI element by coordinate
+
+```powershell
+.\scripts\mouse-click.ps1 -X 960 -Y 540          # left-click centre of 1920×1080 screen
+.\scripts\mouse-click.ps1 -X 200 -Y 150 -Button Right   # right-click (context menu)
+.\scripts\mouse-click.ps1 -X 400 -Y 300 -DoubleClick    # double-click
+.\scripts\mouse-click.ps1 -X 100 -Y 200 -DragToX 500 -DragToY 200   # drag
 ```
 
 ### Search WeChat for a chat and screenshot the result
@@ -123,6 +135,7 @@ windows-use/
 │   ├── install-binaries.ps1          # one-time setup — downloads .exe files from upstream
 │   ├── focus-and-send.ps1            # focus a process, then send keys (the everyday combo)
 │   ├── focus-and-send.cmd            # cmd.exe equivalent
+│   ├── mouse-click.ps1               # move cursor / click / double-click / drag (pure PowerShell)
 │   ├── screenshot-active-window.ps1  # capture foreground window to PNG
 │   └── wechat-search-and-snap.ps1    # example: focus WeChat, search a chat, screenshot
 └── references/
